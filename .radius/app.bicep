@@ -13,6 +13,7 @@ param registryUsername string = ''
 param registryPassword string = ''
 
 @secure()
+@description('Workflow-managed Postgres password (injected by the deploy pipeline via RADIUS_DEPLOY_PARAMS). Unused/legacy: the model now uses Mongo, which exposes a connection-string secret instead.')
 param postgresPassword string
 
 resource votingApp 'Radius.Core/applications@2025-08-01-preview' = {
@@ -31,15 +32,12 @@ resource redisCache 'Radius.Data/redisCaches@2025-08-01-preview' = {
   }
 }
 
-resource postgresDb 'Radius.Data/postgreSqlDatabases@2025-08-01-preview' = {
-  name: 'reabdul-evapp-postgres'
+resource mongoDb 'Radius.Data/mongoDatabases@2025-08-01-preview' = {
+  name: 'reabdul-evapp-mongo'
   properties: {
     environment: environment
     application: votingApp.id
-    size: 'S'
     database: 'votes'
-    username: 'postgres'
-    password: postgresPassword
   }
 }
 
@@ -82,8 +80,8 @@ resource resultContainer 'Radius.Compute/containers@2025-08-01-preview' = {
       }
     }
     connections: {
-      postgresdb: {
-        source: postgresDb.id
+      mongodb: {
+        source: mongoDb.id
       }
     }
   }
@@ -103,8 +101,8 @@ resource workerContainer 'Radius.Compute/containers@2025-08-01-preview' = {
       rediscache: {
         source: redisCache.id
       }
-      postgresdb: {
-        source: postgresDb.id
+      mongodb: {
+        source: mongoDb.id
       }
     }
   }
