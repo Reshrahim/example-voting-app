@@ -37,7 +37,7 @@ resource postgresDb 'Radius.Data/postgreSqlDatabases@2025-08-01-preview' = {
     environment: environment
     application: votingApp.id
     size: 'S'
-    database: 'postgres'
+    database: 'votes'
     username: 'postgres'
     password: postgresPassword
   }
