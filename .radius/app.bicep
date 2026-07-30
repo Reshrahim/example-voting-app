@@ -2,6 +2,9 @@ extension radius
 
 param environment string
 
+@description('Workflow-managed deploy image tag (injected by the deploy pipeline as the app commit). The container images are built from source, so this is accepted for pipeline compatibility.')
+param image string = ''
+
 @secure()
 param postgresPassword string
 
