@@ -23,7 +23,7 @@ resource votingApp 'Radius.Core/applications@2025-08-01-preview' = {
 }
 
 resource redisCache 'Radius.Data/redisCaches@2025-08-01-preview' = {
-  name: 'redis'
+  name: 'reabdul-evapp-redis'
   properties: {
     environment: environment
     application: votingApp.id
@@ -32,7 +32,7 @@ resource redisCache 'Radius.Data/redisCaches@2025-08-01-preview' = {
 }
 
 resource postgresDb 'Radius.Data/postgreSqlDatabases@2025-08-01-preview' = {
-  name: 'postgres'
+  name: 'reabdul-evapp-postgres'
   properties: {
     environment: environment
     application: votingApp.id
