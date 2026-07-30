@@ -249,7 +249,7 @@ jobs:
             --parameters environmentName="$ENVIRONMENT" \
             --parameters environmentNamespace="$NAMESPACE" \
             --parameters azureSubscriptionId="${{ vars.AZURE_SUBSCRIPTION_ID }}" \
-            --parameters azureResourceGroup="${{ vars.AZURE_BACKING_RESOURCE_GROUP || vars.AZURE_RESOURCE_GROUP }}" \
+            --parameters azureResourceGroup="${{ vars.AZURE_RESOURCE_GROUP }}" \
             --parameters routesGatewayName="$ROUTES_GATEWAY_NAME" \
             --parameters routesGatewayNamespace="$ROUTES_GATEWAY_NAMESPACE" \
             --parameters containerImagesRegistry="$BUILD_REGISTRY" \
