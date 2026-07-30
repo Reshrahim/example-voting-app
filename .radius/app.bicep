@@ -2,16 +2,18 @@ extension radius
 
 param environment string
 
-@description('Workflow-managed deploy image tag (injected by the deploy pipeline as the app commit). The container images are built from source, so this is accepted for pipeline compatibility.')
+@description('Workflow-managed deploy image tag (injected by the deploy pipeline). Unused: containers reference the published upstream images directly.')
 param image string = ''
+
+@description('Workflow-managed GHCR registry username (injected by the deploy pipeline). Unused: the referenced images are public.')
+param registryUsername string = ''
+
+@secure()
+@description('Workflow-managed GHCR registry password (injected by the deploy pipeline). Unused: the referenced images are public.')
+param registryPassword string = ''
 
 @secure()
 param postgresPassword string
-
-param registryUsername string
-
-@secure()
-param registryPassword string
 
 resource votingApp 'Radius.Core/applications@2025-08-01-preview' = {
   name: 'example-voting-app'
@@ -25,6 +27,7 @@ resource redisCache 'Radius.Data/redisCaches@2025-08-01-preview' = {
   properties: {
     environment: environment
     application: votingApp.id
+    size: 'S'
   }
 }
 
@@ -33,68 +36,11 @@ resource postgresDb 'Radius.Data/postgreSqlDatabases@2025-08-01-preview' = {
   properties: {
     environment: environment
     application: votingApp.id
+    size: 'S'
     database: 'postgres'
     username: 'postgres'
     password: postgresPassword
   }
-}
-
-resource registryCreds 'Radius.Security/secrets@2025-08-01-preview' = {
-  name: 'radius-ghcr-registry-creds'
-  properties: {
-    environment: environment
-    application: votingApp.id
-    data: {
-      username: {
-        value: registryUsername
-      }
-      password: {
-        value: registryPassword
-      }
-    }
-  }
-}
-
-resource voteImage 'Radius.Compute/containerImages@2025-08-01-preview' = {
-  name: 'vote-image'
-  properties: {
-    environment: environment
-    application: votingApp.id
-    build: {
-      source: 'git::https://github.com/dockersamples/example-voting-app.git//vote?ref=63e9150ca17af4ed05880d4245e486481f73fcb4'
-    }
-  }
-  dependsOn: [
-    registryCreds
-  ]
-}
-
-resource resultImage 'Radius.Compute/containerImages@2025-08-01-preview' = {
-  name: 'result-image'
-  properties: {
-    environment: environment
-    application: votingApp.id
-    build: {
-      source: 'git::https://github.com/dockersamples/example-voting-app.git//result?ref=63e9150ca17af4ed05880d4245e486481f73fcb4'
-    }
-  }
-  dependsOn: [
-    registryCreds
-  ]
-}
-
-resource workerImage 'Radius.Compute/containerImages@2025-08-01-preview' = {
-  name: 'worker-image'
-  properties: {
-    environment: environment
-    application: votingApp.id
-    build: {
-      source: 'git::https://github.com/dockersamples/example-voting-app.git//worker?ref=63e9150ca17af4ed05880d4245e486481f73fcb4'
-    }
-  }
-  dependsOn: [
-    registryCreds
-  ]
 }
 
 resource voteContainer 'Radius.Compute/containers@2025-08-01-preview' = {
@@ -104,7 +50,7 @@ resource voteContainer 'Radius.Compute/containers@2025-08-01-preview' = {
     application: votingApp.id
     containers: {
       vote: {
-        image: voteImage.properties.imageReference
+        image: 'ghcr.io/dockersamples/example-voting-app-vote:latest'
         ports: {
           web: {
             containerPort: 80
@@ -127,7 +73,7 @@ resource resultContainer 'Radius.Compute/containers@2025-08-01-preview' = {
     application: votingApp.id
     containers: {
       result: {
-        image: resultImage.properties.imageReference
+        image: 'ghcr.io/dockersamples/example-voting-app-result:latest'
         ports: {
           web: {
             containerPort: 80
@@ -150,7 +96,7 @@ resource workerContainer 'Radius.Compute/containers@2025-08-01-preview' = {
     application: votingApp.id
     containers: {
       worker: {
-        image: workerImage.properties.imageReference
+        image: 'ghcr.io/dockersamples/example-voting-app-worker:latest'
       }
     }
     connections: {
