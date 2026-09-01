@@ -108,16 +108,6 @@ jobs:
       - name: Set up control plane
         uses: radius-project/ai-extensions/.github/extension/actions/setup-control-plane@d8dffe415feea27f109eb21d49a79357b380098b
 
-      - name: Ensure the user bin directory is writable
-        run: |
-          # load-contrib-catalog installs yq into $HOME/.local/bin. Earlier steps
-          # can leave that directory root-owned, and the installer only runs
-          # `mkdir -p` (which succeeds for an existing directory regardless of
-          # owner), so the install then fails with "Permission denied" and aborts
-          # the deploy. Take ownership first.
-          sudo mkdir -p "$HOME/.local/bin"
-          sudo chown -R "$(id -u):$(id -g)" "$HOME/.local"
-
       - name: Load Radius contrib catalog
         uses: radius-project/ai-extensions/.github/extension/actions/load-contrib-catalog@d8dffe415feea27f109eb21d49a79357b380098b
 
