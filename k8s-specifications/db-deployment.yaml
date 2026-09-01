@@ -15,18 +15,16 @@ spec:
         app: db
     spec:
       containers:
-      - image: postgres:15-alpine
-        name: postgres
+      - image: mongo:7
+        name: mongo
         env:
-        - name: POSTGRES_USER
-          value: postgres
-        - name: POSTGRES_PASSWORD
-          value: postgres
+        - name: MONGO_INITDB_DATABASE
+          value: votes
         ports:
-        - containerPort: 5432
-          name: postgres
+        - containerPort: 27017
+          name: mongo
         volumeMounts:
-        - mountPath: /var/lib/postgresql/data
+        - mountPath: /data/db
           name: db-data
       volumes:
       - name: db-data

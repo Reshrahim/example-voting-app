@@ -2,9 +2,6 @@ extension radius
 
 param environment string
 
-@secure()
-param postgresPassword string
-
 @description('Password/token for the OCI registry the containerImages recipe pushes to (a GitHub token with write:packages for ghcr.io).')
 @secure()
 param registryPassword string
@@ -20,15 +17,13 @@ resource exampleVotingApp 'Radius.Core/applications@2025-08-01-preview' = {
   }
 }
 
-resource postgresDb 'Radius.Data/postgreSqlDatabases@2025-08-01-preview' = {
+resource mongoDb 'Radius.Data/mongoDatabases@2025-08-01-preview' = {
   name: 'db'
   properties: {
     environment: environment
     application: exampleVotingApp.id
-    codeReference: 'result/server.js#L20'
-    database: 'postgres'
-    password: postgresPassword
-    username: 'postgres'
+    codeReference: 'result/server.js#L13'
+    database: 'votes'
   }
 }
 
@@ -114,10 +109,23 @@ resource resultContainer 'Radius.Compute/containers@2025-08-01-preview' = {
   properties: {
     environment: environment
     application: exampleVotingApp.id
-    codeReference: 'result/server.js#L74'
+    codeReference: 'result/server.js#L78'
     containers: {
       result: {
         image: resultImage.properties.imageReference
+        env: {
+          MONGO_DATABASE: {
+            value: 'votes'
+          }
+          MONGO_URL: {
+            valueFrom: {
+              secretKeyRef: {
+                key: 'connectionString'
+                secretName: mongoDb.properties.secrets.name
+              }
+            }
+          }
+        }
         ports: {
           web: {
             containerPort: 80
@@ -126,8 +134,8 @@ resource resultContainer 'Radius.Compute/containers@2025-08-01-preview' = {
       }
     }
     connections: {
-      postgresdb: {
-        source: postgresDb.id
+      mongodb: {
+        source: mongoDb.id
       }
     }
   }
@@ -162,15 +170,28 @@ resource workerContainer 'Radius.Compute/containers@2025-08-01-preview' = {
   properties: {
     environment: environment
     application: exampleVotingApp.id
-    codeReference: 'worker/Program.cs#L15'
+    codeReference: 'worker/Program.cs#L21'
     containers: {
       worker: {
         image: workerImage.properties.imageReference
+        env: {
+          MONGO_DATABASE: {
+            value: 'votes'
+          }
+          MONGO_URL: {
+            valueFrom: {
+              secretKeyRef: {
+                key: 'connectionString'
+                secretName: mongoDb.properties.secrets.name
+              }
+            }
+          }
+        }
       }
     }
     connections: {
-      postgresdb: {
-        source: postgresDb.id
+      mongodb: {
+        source: mongoDb.id
       }
       rediscache: {
         source: redisCache.id

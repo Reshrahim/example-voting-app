@@ -62,15 +62,14 @@ services:
       - back-tier
 
   db:
-    image: postgres:15-alpine
+    image: mongo:7
     environment:
-      POSTGRES_USER: "postgres"
-      POSTGRES_PASSWORD: "postgres"
+      MONGO_INITDB_DATABASE: "votes"
     volumes:
-      - "db-data:/var/lib/postgresql/data"
+      - "db-data:/data/db"
       - "./healthchecks:/healthchecks"
     healthcheck:
-      test: /healthchecks/postgres.sh
+      test: /healthchecks/mongo.sh
       interval: "5s"
     networks:
       - back-tier

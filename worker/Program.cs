@@ -1,11 +1,11 @@
 using System;
-using System.Data.Common;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
+using MongoDB.Bson;
+using MongoDB.Driver;
 using Newtonsoft.Json;
-using Npgsql;
 using StackExchange.Redis;
 
 namespace Worker
@@ -16,14 +16,14 @@ namespace Worker
         {
             try
             {
-                var pgsql = OpenDbConnection("Server=db;Username=postgres;Password=postgres;");
+                // Radius projects the recipe-generated connection string into
+                // MONGO_URL. The fallback is the "db" service from docker-compose.
+                var mongoUrl = Environment.GetEnvironmentVariable("MONGO_URL") ?? "mongodb://db:27017";
+                var mongoDatabase = Environment.GetEnvironmentVariable("MONGO_DATABASE") ?? "votes";
+
+                var votes = OpenMongoCollection(mongoUrl, mongoDatabase);
                 var redisConn = OpenRedisConnection("redis");
                 var redis = redisConn.GetDatabase();
-
-                // Keep alive is not implemented in Npgsql yet. This workaround was recommended:
-                // https://github.com/npgsql/npgsql/issues/1214#issuecomment-235828359
-                var keepAliveCommand = pgsql.CreateCommand();
-                keepAliveCommand.CommandText = "SELECT 1";
 
                 var definition = new { vote = "", voter_id = "" };
                 while (true)
@@ -42,20 +42,9 @@ namespace Worker
                     {
                         var vote = JsonConvert.DeserializeAnonymousType(json, definition);
                         Console.WriteLine($"Processing vote for '{vote.vote}' by '{vote.voter_id}'");
-                        // Reconnect DB if down
-                        if (!pgsql.State.Equals(System.Data.ConnectionState.Open))
-                        {
-                            Console.WriteLine("Reconnecting DB");
-                            pgsql = OpenDbConnection("Server=db;Username=postgres;Password=postgres;");
-                        }
-                        else
-                        { // Normal +1 vote requested
-                            UpdateVote(pgsql, vote.voter_id, vote.vote);
-                        }
-                    }
-                    else
-                    {
-                        keepAliveCommand.ExecuteNonQuery();
+                        // The Mongo driver reconnects on its own, so a dropped
+                        // connection surfaces here as a retryable write error.
+                        UpdateVote(votes, vote.voter_id, vote.vote);
                     }
                 }
             }
@@ -66,24 +55,27 @@ namespace Worker
             }
         }
 
-        private static NpgsqlConnection OpenDbConnection(string connectionString)
+        private static IMongoCollection<BsonDocument> OpenMongoCollection(string connectionString, string databaseName)
         {
-            NpgsqlConnection connection;
+            var client = new MongoClient(connectionString);
+            var collection = client.GetDatabase(databaseName).GetCollection<BsonDocument>("votes");
 
             while (true)
             {
                 try
                 {
-                    connection = new NpgsqlConnection(connectionString);
-                    connection.Open();
+                    // Force a round trip so startup waits for the database the
+                    // same way the previous SQL implementation did.
+                    client.GetDatabase(databaseName)
+                        .RunCommand<BsonDocument>(new BsonDocument("ping", 1));
                     break;
                 }
-                catch (SocketException)
+                catch (MongoException)
                 {
                     Console.Error.WriteLine("Waiting for db");
                     Thread.Sleep(1000);
                 }
-                catch (DbException)
+                catch (TimeoutException)
                 {
                     Console.Error.WriteLine("Waiting for db");
                     Thread.Sleep(1000);
@@ -92,14 +84,7 @@ namespace Worker
 
             Console.Error.WriteLine("Connected to db");
 
-            var command = connection.CreateCommand();
-            command.CommandText = @"CREATE TABLE IF NOT EXISTS votes (
-                                        id VARCHAR(255) NOT NULL UNIQUE,
-                                        vote VARCHAR(255) NOT NULL
-                                    )";
-            command.ExecuteNonQuery();
-
-            return connection;
+            return collection;
         }
 
         private static ConnectionMultiplexer OpenRedisConnection(string hostname)
@@ -130,25 +115,13 @@ namespace Worker
                 .First(a => a.AddressFamily == AddressFamily.InterNetwork)
                 .ToString();
 
-        private static void UpdateVote(NpgsqlConnection connection, string voterId, string vote)
+        private static void UpdateVote(IMongoCollection<BsonDocument> votes, string voterId, string vote)
         {
-            var command = connection.CreateCommand();
-            try
-            {
-                command.CommandText = "INSERT INTO votes (id, vote) VALUES (@id, @vote)";
-                command.Parameters.AddWithValue("@id", voterId);
-                command.Parameters.AddWithValue("@vote", vote);
-                command.ExecuteNonQuery();
-            }
-            catch (DbException)
-            {
-                command.CommandText = "UPDATE votes SET vote = @vote WHERE id = @id";
-                command.ExecuteNonQuery();
-            }
-            finally
-            {
-                command.Dispose();
-            }
+            // One document per voter, so a repeat vote replaces the previous one.
+            var filter = Builders<BsonDocument>.Filter.Eq("_id", voterId);
+            var document = new BsonDocument { { "_id", voterId }, { "vote", vote } };
+
+            votes.ReplaceOne(filter, document, new ReplaceOptions { IsUpsert = true });
         }
     }
 }

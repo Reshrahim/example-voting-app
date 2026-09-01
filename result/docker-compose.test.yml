@@ -45,12 +45,11 @@ services:
       - back-tier
 
   db:
-    image: postgres:9.4
+    image: mongo:7
     environment:
-      POSTGRES_USER: "postgres"
-      POSTGRES_PASSWORD: "postgres"
+      MONGO_INITDB_DATABASE: "votes"
     volumes:
-      - "db-data:/var/lib/postgresql/data"
+      - "db-data:/data/db"
     networks:
       - back-tier
 
